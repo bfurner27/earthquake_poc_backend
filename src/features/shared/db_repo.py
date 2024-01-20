@@ -10,6 +10,10 @@ class OrderBy:
     field: str
     order: Order
 
+    def __init__(self, field: str, order: Order = Order.ASC):
+        self.field = field
+        self.order = order
+
 class ReadParamsBase:
     offset: int = 0
     limit: int = 100

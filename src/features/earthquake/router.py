@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from src.features.shared.api_model import Paging, get_offset_from_page, get_paging
+from src.features.shared.db_repo import OrderBy
 
 from .internal_model import CreateEarthquakeInternal, EarthQuakeInternal
 from .api_model import EarthQuakeOutput, EarthQuakeOutputData, EarthquakeCreateData, EarthquakeCreateInput, EarthquakeOutputWPagingData
@@ -31,7 +32,8 @@ def read_earthquakes(
     if (offset != 0 and offset > paging.totalRecords):
         raise HTTPException(status_code=422, detail='offset is more than total entries available')
 
-    results = db.read_earthquakes(dbSession, db.ReadEarthquakeParams(offset = offset, limit = pageSize))
+    orderBy: OrderBy = OrderBy('id')
+    results = db.read_earthquakes(dbSession, db.ReadEarthquakeParams(offset = offset, limit = pageSize, orderBy = orderBy))
 
     return EarthquakeOutputWPagingData(
         data = [ EarthQuakeOutput(

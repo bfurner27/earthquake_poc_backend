@@ -1,4 +1,5 @@
-from sqlalchemy import desc, asc
+from fastapi import Query
+from sqlalchemy import Column, desc, asc
 from sqlalchemy.orm import Session
 from geoalchemy2.functions import ST_AsGeoJSON
 from src.features.shared.db_repo import ReadParamsBase, Order
@@ -13,7 +14,7 @@ def earthquake_count(db: Session):
     return db.query(DBEarthquake).count()
 
 def read_earthquake(db: Session, earthquakeId: int) -> EarthQuakeInternal | None:
-    earthquakes = db.query(DBEarthquake).filter(id == earthquakeId).all()
+    earthquakes = db.query(DBEarthquake).filter(DBEarthquake.id == earthquakeId).all()
     if (len(earthquakes) > 1):
         raise Exception(f'the id specified had multiple enries, should only have one id: {earthquakeId}')
     
@@ -23,14 +24,25 @@ def read_earthquake(db: Session, earthquakeId: int) -> EarthQuakeInternal | None
     return earthquakes[0]
 
 def read_earthquakes(db: Session, params: ReadEarthquakeParams) -> list[EarthQuakeInternal]:
-    q = db.query(DBEarthquake, DBEarthquake.coordinates_json).offset(params.offset).limit(params.limit)
+    field: Column = DBEarthquake.id
+    sqlOrder = asc
     if (params.orderBy != None):
-        field = params.orderBy.field
+        fieldRaw = params.orderBy.field
         order = params.orderBy.order
         sqlOrder = asc
         if (order == Order.DESC):
             sqlOrder = desc
-        q.order_by(field, sqlOrder)
+
+        if(fieldRaw == 'id'):
+            field = DBEarthquake.id
+        elif (fieldRaw == 'magnitude'):
+            field = DBEarthquake.magnitude
+        elif (fieldRaw == 'date'):
+            field = DBEarthquake.date
+        else:
+            raise Exception(f"unrecognized field passed into the order by {fieldRaw}")
+    
+    q = db.query(DBEarthquake, DBEarthquake.coordinates_json).order_by(sqlOrder(field)).offset(params.offset).limit(params.limit)
 
     result: list[EarthQuakeInternal] = list()
     for dbEarthquake, coordinate_json in q.all():
@@ -84,14 +96,14 @@ def create_earthquakes(db: Session, earthquakes: list[CreateEarthquakeInternal])
 
 def update_earthquakes(db: Session, earthquakes: list[EarthQuakeInternal]):
     for e in earthquakes:
-        db.query(DBEarthquake).filter(id == e.id).update(DBEarthquake(
-            providerId = e.providerId, 
-            date = e.date, 
-            depth = e.depth if hasattr(e, 'depth') else None, 
-            magnitude = e.magnitude, 
-            type = e.type if hasattr(e, 'type') else None, 
-            coordinates = e.coordinates
-        ))
+        dbEarthquake = db.query(DBEarthquake).filter(DBEarthquake.id == e.id).first()
+        dbEarthquake.providerId = e.providerId
+        dbEarthquake.date = e.date
+        dbEarthquake.depth = e.depth if hasattr(e, 'depth') else dbEarthquake.depth
+        dbEarthquake.magnitude = e.magnitude
+        dbEarthquake.type = e.type if hasattr(e, 'type') else dbEarthquake.type
+        dbEarthquake.coordinates = f'POINT({e.latitude} {e.longitude})'
+        
         db.commit()
 
     return earthquakes
