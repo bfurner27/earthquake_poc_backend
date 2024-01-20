@@ -110,6 +110,6 @@ def update_earthquakes(db: Session, earthquakes: list[EarthQuakeInternal]):
 
 def delete_earthquakes(db: Session, ids: list[int]):
     for id in ids:
-        db.query(DBEarthquake).filter(DBEarthquake(id = id)).delete()
+        db.query(DBEarthquake).filter(DBEarthquake.id == id).delete()
 
     return
