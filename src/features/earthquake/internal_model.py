@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from src.features.country.internal_model import CountryInternal
 
 class CreateEarthquakeInternal:
     providerId: str
@@ -9,6 +10,7 @@ class CreateEarthquakeInternal:
     longitude: float
     depth: Optional[float]
     type: Optional[str]
+    country: Optional[CountryInternal]
 
     def __init__(
         self, 
@@ -18,19 +20,18 @@ class CreateEarthquakeInternal:
         latitude: float,
         longitude: float,
         depth: Optional[float] = None, 
-        type: Optional[str] = None
+        type: Optional[str] = None,
+        country: Optional[CountryInternal] = None,
     ):
         self.providerId = providerId
         self.date = date
         self.magnitude = magnitude
         self.latitude = latitude
         self.longitude = longitude
-
-        if (depth != None):
-            self.depth = depth
-
-        if (type != None):
-            self.type = type
+        
+        self.depth = depth
+        self.type = type
+        self.country = country
 
 class EarthQuakeInternal(CreateEarthquakeInternal):
     id: int
@@ -44,7 +45,8 @@ class EarthQuakeInternal(CreateEarthquakeInternal):
         latitude: float,
         longitude: float,
         depth: Optional[float] = None, 
-        type: Optional[str] = None
+        type: Optional[str] = None,
+        country: Optional[CountryInternal] = None,
     ):
         self.id = id
-        super().__init__(providerId, date, magnitude, latitude, longitude, depth = depth, type = type)
+        super().__init__(providerId, date, magnitude, latitude, longitude, depth = depth, type = type, country = country)

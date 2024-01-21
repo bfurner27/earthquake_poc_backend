@@ -1,14 +1,26 @@
-from fastapi import Query
+from datetime import datetime
+import sys
+from typing import Optional
 from sqlalchemy import Column, desc, asc
 from sqlalchemy.orm import Session
 from geoalchemy2.functions import ST_AsGeoJSON
-from src.features.shared.db_repo import ReadParamsBase, Order
+from .transformers import fromDBtoInternal, fromInternalToDB
+from src.features.shared.db_repo import OrderBy, ReadParamsBase, Order
 from .db_model import Earthquake as DBEarthquake
 from .internal_model import EarthQuakeInternal, CreateEarthquakeInternal
-from json import loads
 
 class ReadEarthquakeParams(ReadParamsBase):
-    pass
+    minDatetime: datetime | None = None
+
+    def __init__(
+        self,     
+        offset: int = 0,
+        limit: int = 100,
+        orderBy: OrderBy | None = None,
+        minDatetime: Optional[datetime] = None,
+    ):
+        self.minDatetime = minDatetime
+        super().__init__(offset, limit, orderBy)
 
 def earthquake_count(db: Session):
     return db.query(DBEarthquake).count()
@@ -42,33 +54,19 @@ def read_earthquakes(db: Session, params: ReadEarthquakeParams) -> list[EarthQua
         else:
             raise Exception(f"unrecognized field passed into the order by {fieldRaw}")
     
-    q = db.query(DBEarthquake, DBEarthquake.coordinates_json).order_by(sqlOrder(field)).offset(params.offset).limit(params.limit)
+    q = db.query(DBEarthquake, DBEarthquake.coordinates_json)
 
+    if (params.minDatetime != None):
+        q = q.filter(DBEarthquake.date >= params.minDatetime.strftime('%Y-%m-%d %H:%M:%S'))
+
+    q = q.order_by(sqlOrder(field)).offset(params.offset).limit(params.limit)
     result: list[EarthQuakeInternal] = list()
     for dbEarthquake, coordinate_json in q.all():
-        coordinates = loads(coordinate_json).get('coordinates', [None, None])
-        country = EarthQuakeInternal(
-            dbEarthquake.id, 
-            dbEarthquake.providerId, 
-            dbEarthquake.date, 
-            dbEarthquake.magnitude,
-            coordinates[0],
-            coordinates[1], 
-            depth = dbEarthquake.depth, 
-            type = dbEarthquake.type
-        )
-        result.append(country)
+        result.append(fromDBtoInternal(dbEarthquake, coordinate_json))
     return result
 
 def create_earthquakes(db: Session, earthquakes: list[CreateEarthquakeInternal]):
-    dbEarthquakes = [ DBEarthquake(
-        providerId = e.providerId, 
-        date = e.date, 
-        depth = e.depth if hasattr(e, 'depth') else None, 
-        magnitude = e.magnitude, 
-        type = e.type if hasattr(e, 'type') else None, 
-        coordinates = f'POINT({e.latitude} {e.longitude})'
-    ) for e in earthquakes ]   
+    dbEarthquakes = [ fromInternalToDB(e) for e in earthquakes ]
 
     db.add_all(dbEarthquakes)
     db.commit()
@@ -79,18 +77,7 @@ def create_earthquakes(db: Session, earthquakes: list[CreateEarthquakeInternal])
         e = dbEarthquakes[i]
         q = db.query(e.coordinates_json)
         data = q.all()[0][0]
-        jsonData = loads(data)
-        rawCoordinates = jsonData.get('coordinates', [None, None])
-        results.append(EarthQuakeInternal(
-        e.id, 
-        e.providerId, 
-        e.date, 
-        e.magnitude, 
-        rawCoordinates[0], 
-        rawCoordinates[1], 
-        depth = e.depth if hasattr(e, 'depth') else None, 
-        type = e.type if hasattr(e, 'type') else None,
-    ))
+        results.append(fromDBtoInternal(e, data))
 
     return results
 
@@ -103,6 +90,7 @@ def update_earthquakes(db: Session, earthquakes: list[EarthQuakeInternal]):
         dbEarthquake.magnitude = e.magnitude
         dbEarthquake.type = e.type if hasattr(e, 'type') else dbEarthquake.type
         dbEarthquake.coordinates = f'POINT({e.latitude} {e.longitude})'
+        dbEarthquake.countryId = e.country.id if hasattr(e, 'country')  else None
         
         db.commit()
 

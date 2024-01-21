@@ -1,10 +1,10 @@
 from json import dumps
 from typing import Optional
-from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 from .db_model import Country as DBCountry
 from .internal_model import CountryInternal, CreateCountryInternal
 from src.features.shared.db_repo import ReadParamsBase
+from geoalchemy2.functions import ST_Contains, ST_Within, ST_MakePoint, ST_GeogFromText, ST_DWithin
 
 class ReadCountryParams(ReadParamsBase):
     pass
@@ -69,9 +69,24 @@ def update_country(db: Session, country: CountryInternal) -> Optional[CountryInt
 
 def delete_countries(db: Session, ids: list[int]):
     for id in ids:
-        db.query(CountryInternal).filter(DBCountry(id = id)).delete()
+        db.query(DBCountry).filter(DBCountry.id == id).delete()
 
     return
+
+def check_coordinates_in_country(db: Session, latitude: float, longitude: float) -> Optional[CountryInternal]:
+    q = db.query(DBCountry).where(ST_DWithin(ST_GeogFromText(f'POINT({longitude} {latitude})'), DBCountry.boundaries, 4326))
+    
+    countries = q.all()
+    if (len(countries) > 1):
+        print(f'there were multiple countries that contained the coordinates {latitude, longitude}')
+    
+    if (len(countries) == 0):
+        return None
+    
+    c = countries[0]
+    return CountryInternal(id = c.id, name = c.name, boundaries = c.boundaries, requestId = c.requestId)
+
+
 
 def delete_country(db: Session, id: int):
     delete_countries(db, [id])

@@ -39,3 +39,10 @@ class CountryCreate(BaseModel):
 
 class CountryCreateInput(ApiRequest):
     data: Annotated[list[CountryCreate], Field(max_length = 100)]
+
+class TopCountryEarthquakeCount(BaseModel):
+    name: str
+    count: int
+
+class TopCountryEarthquakeCountResponse(ApiResponse):
+    data: list[TopCountryEarthquakeCount]
