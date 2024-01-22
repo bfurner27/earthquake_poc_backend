@@ -1,13 +1,13 @@
 from datetime import datetime
 import sys
 from typing import Optional
-from sqlalchemy import Column, desc, asc
+from sqlalchemy import Column, desc, asc, text
 from sqlalchemy.orm import Session
 from geoalchemy2.functions import ST_AsGeoJSON
 from .transformers import fromDBtoInternal, fromInternalToDB
 from src.features.shared.db_repo import OrderBy, ReadParamsBase, Order
 from .db_model import Earthquake as DBEarthquake
-from .internal_model import EarthQuakeInternal, CreateEarthquakeInternal
+from .internal_model import EarthQuakeInternal, CreateEarthquakeInternal, EarthquakeByYearInternal
 
 class ReadEarthquakeParams(ReadParamsBase):
     minDatetime: datetime | None = None
@@ -101,3 +101,21 @@ def delete_earthquakes(db: Session, ids: list[int]):
         db.query(DBEarthquake).filter(DBEarthquake.id == id).delete()
 
     return
+
+def get_earthquake_counts_by_year(db: Session) -> list[EarthquakeByYearInternal]:
+    q = text("""
+        SELECT 
+            extract(year from e.date) as year,
+            count(*) as earthquakeCount
+        FROM earthquakes as e
+        GROUP BY year
+        ORDER BY year desc
+    """)
+
+    rows = db.execute(q)
+    
+    results: list[EarthquakeByYearInternal] = [] 
+    for row in rows:
+        results.append(EarthquakeByYearInternal(int(row[0]), int(row[1])))
+
+    return results

@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from src.features.shared.api_model import Paging, get_offset_from_page, get_paging
-from src.features.shared.db_repo import OrderBy
+from src.features.shared.db_repo import Order, OrderBy
 
 from .internal_model import CreateEarthquakeInternal, EarthQuakeInternal
-from .api_model import EarthQuakeOutput, EarthQuakeOutputData, EarthquakeCreateData, EarthquakeCreateInput, EarthquakeOutputWPagingData
+from .api_model import EarthQuakeOutput, EarthQuakeOutputData, EarthQuakeOutputWithCountry, EarthquakeByYear, EarthquakeCreateData, EarthquakeCreateInput, EarthquakeOutputWPagingData, EarthquakeStatisticEntry, EarthquakeStatistics
 from ..earthquake import db_repo as db
+from ..country import db_repo as countryDB
 from src.features.shared.dependencies import get_db
 
 router = APIRouter()
@@ -48,6 +49,50 @@ def read_earthquakes(
         ) for e in results],
         paging = paging,
     )
+
+@router.get('/statistics')
+def get_statistics(dbSession: Session = Depends(get_db)) -> EarthquakeStatistics:
+    earthquakesByYear = db.get_earthquake_counts_by_year(dbSession)
+
+    top5EarthquakeRows = db.read_earthquakes(dbSession, db.ReadEarthquakeParams(limit=5, orderBy=OrderBy('magnitude', Order.DESC)))
+
+    top5Earthquakes: list[EarthQuakeOutputWithCountry] = []
+    for e in top5EarthquakeRows:
+        outE = EarthQuakeOutputWithCountry(
+            providerId=e.providerId, 
+            date=e.date, 
+            depth=e.depth if hasattr(e, 'depth') else None, 
+            magnitude=e.magnitude,
+            type=e.type if hasattr(e, 'type') else None,
+            latitude=e.latitude,
+            longitude=e.longitude,
+            id=e.id,
+            country=None
+        )
+
+        if (e.country != None):
+            e.country = e.country.name
+        else:
+            country = countryDB.check_coordinates_in_country(dbSession, e.latitude, e.longitude)
+            if (country != None):
+                if (not hasattr(e, 'country') or e.country == None):
+                    e.country = country
+                    db.update_earthquakes(dbSession, [e])
+                outE.country = e.country.name
+        
+        top5Earthquakes.append(outE)
+
+       
+
+    return EarthquakeStatistics(
+        data = [
+            EarthquakeStatisticEntry(
+                countByYear=[EarthquakeByYear(year = e.year, count = e.count) for e in earthquakesByYear],
+                topFiveByMagnitude=top5Earthquakes,
+            )
+        ] 
+    )
+    
 
 @router.get('/{id}')
 def read_earthquake(id: int, dbSession: Session = Depends(get_db)) -> EarthQuakeOutputData:

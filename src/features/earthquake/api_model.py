@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
 from src.features.shared.api_model import ApiResponse, ApiRequest, ApiResponseWPaging
@@ -25,6 +26,20 @@ class EarthQuakeOutputData(ApiResponse):
 
 class EarthquakeOutputWPagingData(ApiResponseWPaging):
     data: list[EarthQuakeOutput]
+
+class EarthquakeByYear(BaseModel):
+    year: int
+    count: int
+
+class EarthQuakeOutputWithCountry(EarthQuakeOutput):
+    country: Optional[str] = None
+
+class EarthquakeStatisticEntry(BaseModel):
+    countByYear: list[EarthquakeByYear]
+    topFiveByMagnitude: list[EarthQuakeOutputWithCountry]
+
+class EarthquakeStatistics(ApiRequest):
+    data: list[EarthquakeStatisticEntry]
 
 
 

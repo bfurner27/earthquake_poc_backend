@@ -50,3 +50,11 @@ class EarthQuakeInternal(CreateEarthquakeInternal):
     ):
         self.id = id
         super().__init__(providerId, date, magnitude, latitude, longitude, depth = depth, type = type, country = country)
+
+class EarthquakeByYearInternal:
+    year: int
+    count: int
+
+    def __init__(self, year: int, count: int):
+        self.year = year
+        self.count = count
