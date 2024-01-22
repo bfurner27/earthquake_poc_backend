@@ -25,5 +25,5 @@ def fromInternalToDB(e: EarthQuakeInternal) -> DBEarthquake:
         magnitude = e.magnitude, 
         type = e.type if hasattr(e, 'type') else None, 
         coordinates = f'POINT({e.latitude} {e.longitude})',
-        countryId = e.country.id if hasattr(e, 'country') else None,
+        countryId = e.country.id if hasattr(e, 'country') and hasattr(e.country, 'id') else None,
     )
